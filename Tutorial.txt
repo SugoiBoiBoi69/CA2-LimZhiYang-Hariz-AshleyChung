@@ -1,0 +1,5 @@
+To run the application, first run the socket server and socket client together on the same system: be it on raspberry pi, local computer or on ec2(cloud server). This is not neccessary if you do not need to view the latest readings. 
+
+Next, include the rootca certificate, private key and certificate path to the certs folder. Additionally, the twilio account sid and authentication token has to be included in the socketclient.py line 45 and 46, and line 226 and 227 of webserver.py. 
+
+Lastly, access the 54.227.223.173:8081 to access the web pages that are hosted on the ec2 web server, and the pages will be loaded automatically. 

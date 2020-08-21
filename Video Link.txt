@@ -1,0 +1,17 @@
+Link to CA2 video demo:
+
+https://youtu.be/D9nT_So5O1os
+
+
+
+
+
+NOTE:
+
+Dear Ms Dora,
+
+Our web application has some issues query the map data for bookingid 0.0, and so there are no map coordinates shown on the individual page for bookingid 0.0. However, it works well for the other pages with the same function and query used, thus its not a logic error. 
+
+We also have issues loading our pages on ec2, in which although the web server runs on the cloud, there is a need to constantly ctrl-c to load the different queries to the IP, and is really inconvenient for us in both the video demo and in troubleshooting. As such, there is an increase in cutting in the video to remove the scenes where we performed that and may feel slightly out of place. 
+
+Thank you. 

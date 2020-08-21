@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <link rel="icon" type="image/png" sizes="16x16" href="../static/plugins/images/grab.png">
+    <title>Grab X Microsoft IOT application</title>
+    <!-- Bootstrap Core CSS -->
+    <link href="../static/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Menu CSS -->
+    <link href="../static/plugins/bower_components/sidebar-nav/dist/sidebar-nav.min.css" rel="stylesheet">
+    <!-- animation CSS -->
+    <link href="../static/css/animate.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link href="../static/css/style.css" rel="stylesheet">
+    <!-- color CSS -->
+    <link href="../static/css/colors/default.css" id="theme" rel="stylesheet">
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+    <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+    <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+<![endif]-->
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+        google.charts.load('current', { 'packages': ['corechart', 'controls', 'table'] });
+        google.charts.load('current', { 'packages': ['line', 'gauge', 'map'], 'mapsApiKey': 'AIzaSyCF7Bo2ckx2GVz1wuQWuoQzOurtmIDSBQ8' });
+        google.charts.setOnLoadCallback(googlecharts_is_ready);
+
+        var chart, table;
+        var graphdata;
+        var tabledata;
+        var bid = '{{ bookingid }}'
+
+        function googlecharts_is_ready() {
+
+
+            function getSpeed() {
+                jQuery.ajax({
+                    url: "/api/getIndividualSpeedDetails/" + bid,
+                    type: 'POST',
+                    success: function (data) {
+                        avgspeed = data[0];
+                        topspeed = data[1];
+                        numofreadings = data[2];
+                        //console.log(avgspeed);
+                        if (topspeed > 90) {
+                            var divContent = $("#alertButton").html() === "";
+                            //document.getElementsByClassName("button")[0];
+                            if ((divContent == true) || ((divContent == false) && (topspeed > document.getElementById("alertButton").getAttribute("value")))) {
+                                $("#alertButton").html('<button type="button" onclick = "sendAlert(this.value,this.dataset.value)" '
+                                    + 'class="btn btn-danger" value='
+                                    + topspeed + ' data-value="' + bid + '" > Alert Driver</button>')
+                            }
+
+                        }
+                        var avgspeedtable = new google.visualization.DataTable();
+                        avgspeedtable.addColumn('number', 'Km/Hr');
+                        avgspeedtable.addRows([[avgspeed]]);
+                        var topspeedtable = new google.visualization.DataTable();
+                        topspeedtable.addColumn('number', 'Km/Hr');
+                        topspeedtable.addRows([[topspeed]]);
+                        var gauge1 = new google.visualization.Gauge(document.getElementById('avgspeed_div'));
+                        var gauge2 = new google.visualization.Gauge(document.getElementById('topspeed_div'));
+                        var options = {
+                            width: 400, height: 120,
+                            redFrom: 90, redTo: 120,
+                            yellowFrom: 80, yellowTo: 90,
+                            minorTicks: 5
+                        };
+                        gauge1.draw(avgspeedtable, options);
+                        gauge2.draw(topspeedtable, options);
+                        $("#numofreadings").html(numofreadings);
+                        //console.log(numofreadings);
+                    }
+                })
+            }
+
+            function getNewData() {
+
+                jQuery.ajax({
+                    url: "/api/getIndividualBooking/" + bid,
+                    type: 'POST',
+                    success: function (ndata) {
+                        newdata = ndata;
+                        console.log(newdata);
+                        var linechartdata = new google.visualization.DataTable();
+                        var accelerationChartData = new google.visualization.DataTable();
+                        var tabledata = new google.visualization.DataTable();
+
+                        linechartdata.addColumn('datetime', 'Time');
+                        linechartdata.addColumn('number', 'Speed');
+
+                        tabledata.addColumn('string', 'Booking ID');
+                        tabledata.addColumn('string', 'Time Elapsed');
+                        tabledata.addColumn('number', 'Speed (km/hr)');
+                        tabledata.addColumn('number', 'Acceleration (m/s²)')
+                        tabledata.addColumn('datetime', 'DateTime of reading');
+
+                        var previousSpeed = 0.0;
+                        var acceleration = 0.0
+                        var speedDiff = 0.0;
+                        var previousSeconds = 0;
+                        var timeDiff = 0;
+
+                        for (i in newdata) {
+                            var currentdata = newdata[i];
+                            bookingid = currentdata.bookingid;
+                            speedkmhour = currentdata.speedkmhour;
+                            speedms = currentdata.speed;
+                            seconds = currentdata.seconds;
+                            minutes = Math.floor(seconds / 60);
+                            seconds_str = minutes + " minutes " + (seconds - (minutes * 60)) + " seconds";
+                            datetime = currentdata.datetime_value;
+                            jsdatetime = new Date(Date.parse(datetime));
+                            jsdatetime.setHours(jsdatetime.getHours() - 8);
+                            //console.log(jsdatetime);
+                            if (i == 0) {
+                                acceleration = acceleration;
+                            }
+                            else {
+                                speedDiff = speedms - previousSpeed;
+                                timeDiff = seconds - previousSeconds;
+                                acceleration = (speedDiff / timeDiff);
+                            }
+                            previousSpeed = speedms;
+                            previousSeconds = seconds;
+                            linechartdata.addRows([[jsdatetime, speedkmhour]]);
+                            tabledata.addRows([[bookingid, seconds_str, speedkmhour, acceleration, jsdatetime]]);
+                        }
+
+                        var chart = new google.visualization.Dashboard(document.getElementById(chart_div));
+
+                        var dateTimeSlider = new google.visualization.ControlWrapper({
+                            controlType: 'ChartRangeFilter',
+                            containerId: 'datetimefilter_div',
+                            options: {
+                                filterColumnIndex: 0,
+                                ui: {
+                                    label: 'Date Time of reading',
+                                    orientation: 'horizontal',
+                                    chartType: 'LineChart',
+                                    chartOptions: {
+                                        height: 80,
+                                        width: 600,
+                                        hAxis: { format: 'dd MMM yyyy' },
+                                        chartArea: {
+                                            width: '100%',
+                                            height: '100%'
+                                        }
+                                    },
+
+                                }
+                            }
+                        });
+
+                        var linechart = new google.visualization.ChartWrapper({
+                            chartType: 'LineChart',
+                            containerId: 'speedlinechart_div',
+                            options: {
+                                interpolateNulls: true,
+                                pointSize: 5,
+                                curveType: 'function',
+                                legend: 'bottom',
+                                vAxis: { baseline: 0, viewWindow: { min: 0, max: 120 } },
+                                hAxis: { format: 'HH:MM:SS' },
+
+                            }
+                        });
+
+                        chart.bind([dateTimeSlider], [linechart]);
+                        chart.draw(linechartdata);
+
+                        var table = new google.visualization.Dashboard(document.getElementById(table_div));
+
+                        // Create a range slider, passing some options
+                        var speedSlider = new google.visualization.ControlWrapper({
+                            controlType: 'NumberRangeFilter',
+                            containerId: 'speedfilter_div',
+                            options: {
+                                filterColumnIndex: 2,
+                                ui: {
+                                    label: 'Speed (Km/Hr)',
+                                    orientation: 'vertical',
+                                    labelStacking: 'vertical'
+                                },
+
+                            }
+                        });
+                        var AccelerationSlider = new google.visualization.ControlWrapper({
+                            controlType: 'NumberRangeFilter',
+                            containerId: 'accelerationfilter_div',
+                            options: {
+                                filterColumnIndex: 3,
+                                ui: {
+                                    step: -0.01,
+                                    label: 'Acceleration (m/s²)',
+                                    orientation: 'vertical',
+                                    labelStacking: 'vertical'
+                                },
+
+                            }
+                        });
+
+                        var tablechart = new google.visualization.ChartWrapper({
+                            chartType: 'Table',
+                            containerId: 'speedchart_div',
+                            options: {
+                                showRowNumber: true,
+                                height: '500px',
+                                page: 'enable',
+                                pageSize: 8,
+                            }
+                        });
+
+                        table.bind([speedSlider, AccelerationSlider], [tablechart]);
+                        table.draw(tabledata, {
+                            showRowNumber: true,
+                            width: '100%',
+                            height: '500px',
+                            page: 'enable',
+                            pageSize: 8,
+                            style: 'text-align:center;',
+                            allowHtml: true
+                        });
+
+                        google.visualization.events.addListener(dateTimeSlider, 'statechange', function () {
+                            var dateTimeState = dateTimeSlider.getState();
+                            var view1 = new google.visualization.DataView(tabledata);
+                            view1.setRows(view1.getFilteredRows([{ column: 3, minValue: dateTimeState.range.start, maxValue: dateTimeState.range.end }]));
+                            table.draw(view1);
+                        });
+                        google.visualization.events.addListener(speedSlider, 'statechange', function () {
+                            var speedState = speedSlider.getState();
+                            var view1 = new google.visualization.DataView(linechartdata);
+                            view1.setRows(view1.getFilteredRows([{ column: 1, minValue: speedState.lowValue, maxValue: speedState.highValue }]));
+
+                            chart.draw(view1);
+                        });
+
+                    }//end success
+                });//end ajax
+            } //end getNewData
+
+            function getDriverImage() {
+                $.ajax({
+                    url: "/api/getDriverImage/" + bid,
+                    type: 'POST',
+                    success: function (data) {
+                        var datarows = data;
+                        console.log(datarows);
+                        var similaritymsg = ""
+                        image = datarows[0];
+                        similarity = datarows[1];
+                        console.log(similarity);
+                        if (similarity > 1) {
+                            similaritymsg = "Driver's face detected, with " + similarity + " % similarity match";
+                        }
+                        else if (similarity == 0) {
+                            similaritymsg = "Driver's face does not match the expected face in the database"
+                        }
+                        agemsg = datarows[2];
+                        //var base64String = Convert.ToBase64String(path);
+                        if (image == null) {
+                            console.log('image not retrieved');
+                        }
+                        else {
+                            var imagedivcontent = $("#imagebox").html() === "";
+                            if ((imagedivcontent == true) || ((imagedivcontent == false) &&
+                                ((image === document.querySelector("img").getAttribute("value") == false)))) {
+                                $("#imagebox").html('<div class="row"><div class="col-lg-4 col-sm-6 col-xs-12"><div class="white-box analytics-info">'
+                                    + '<h3 class="box-title" style="text-align: center;">Driver\'s Age</h3><ul class="list-inline two-part"><li>'
+                                    + '<div class="fa fa-taxi" style="color: yellowgreen;"></div></li><li class="text-right" style="text-align:center;" ><i class="ti-arrow-up text-success"></i>'
+                                    + '<span class="counter text-success" style="font-size:20px">' + agemsg + '</span></li></div></div>' + '<div class="col-lg-4 col-sm-6 col-xs-12">'
+                                    + '<div class="white-box analytics-info"><img src ="data:image/jpg;base64, '
+                                    + image + '" value="' + image + '" style= "width: 100%"/></div></div><div class="col-lg-4 col-sm-6 col-xs-12">'
+                                    + '<div class="white-box analytics-info"><h3 class="box-title" style="text-align: center;">Driver\'s Match</h3>'
+                                    + '<ul class="list-inline two-part"><li><div class="fa fa-taxi" style="color: yellowgreen;"></div></li><li class="text-right"'
+                                    + 'style="text-align:center"><i class="ti-arrow-up text-success" ></i><span class="counter text-success" style="font-size:20px">'
+                                    + similaritymsg + '</span></li></div>');
+                            }
+                            console.log("image updated");
+                        }
+                    }
+                });
+            }
+
+            function getMapData() {
+                jQuery.ajax({
+                    url: "/api/getIndividualMapData/" + bid,
+                    type: 'POST',
+                    success: function (data) {
+                        mapdata = data;
+                        console.log(mapdata);
+
+                        var maptable = new google.visualization.DataTable();
+                        maptable.addColumn('number', 'Latitude');
+                        maptable.addColumn('number', 'Longitude');
+                        maptable.addColumn('datetime', 'Date Time');
+
+                        for (n in mapdata) {
+                            var currentdata = mapdata[n];
+                            lat = currentdata.Latitude;
+                            long = currentdata.Longitude;
+                            datetime = currentdata.datetime_value;
+                            jsdatetime = new Date(Date.parse(datetime));
+                            //jstime = jsdatetime.toLocaleTimeString();
+
+                            maptable.addRows([[lat, long, jsdatetime]]);
+                        }
+
+                        var options = {
+                            zoomLevel: 11,
+                            showTooltip: true,
+                            showInfoWindow: true,
+                            useMapTypeControl: true,
+                            icons: {
+                                default: {
+                                    normal: '../static/plugins/images/taxi.png',
+                                    selected: '../static/plugins/images/taxi-front.png'
+                                }
+                            },
+                            mapType: 'normal'
+
+                        }
+                        var map = new google.visualization.Map(document.getElementById('map_div'));
+                        map.draw(maptable, options);
+
+                    }
+                });
+            }
+
+            function getSafetyValue() {
+                jQuery.ajax({
+                    url: "/api/predictSafety/" + bid,
+                    type: 'POST',
+                    success: function (value) {
+                        var regressValue = value;
+                        console.log(regressValue);
+                        var safetyMsg = "";
+                        if (regressValue >= 0.8) {
+                            safetyMsg = "Trip was dangerous. Driver to receive penalty";
+                            $("#safetybox").html('<div class="row"></div><div class="col-lg-4 col-sm-6 col-xs-12"></div><div class="col-lg-4 col-sm-6 col-xs-12"><div class="white-box analytics-info">'
+                            + '<h3 class="box-title" style="text-align: center;">Safety of Trip</h3>'
+                            + '<ul class="list-inline two-part"><li><div class="fa fa-taxi" style="color: red;"></div></li><li class="text-right"'
+                            + 'style="text-align:center"><i class="ti-arrow-up text-success" ></i><span class="counter text-success" style="font-size:20px color:red;" >'
+                            + safetyMsg + '</span></li></div></div><div class="col-lg-4 col-sm-6 col-xs-12"></div></div>');
+                        }
+                        else if ((regressValue > 0.6) && (regressValue<0.8)){
+                            safetyMsg = "Trip was slightly dangerous";
+                            $("#safetybox").html('<div class="row"></div><div class="col-lg-4 col-sm-6 col-xs-12"></div><div class="col-lg-4 col-sm-6 col-xs-12"><div class="white-box analytics-info">'
+                            + '<h3 class="box-title" style="text-align: center;">Safety of Trip</h3>'
+                            + '<ul class="list-inline two-part"><li><div class="fa fa-taxi" style="color: #ffb347;"></div></li><li class="text-right"'
+                            + 'style="text-align:center"><i class="ti-arrow-up text-success" ></i><span class="counter text-success" style="font-size:20px; color:#ffb347">'
+                            + safetyMsg + '</span></li></div></div><div class="col-lg-4 col-sm-6 col-xs-12"></div></div>');
+                        }
+                        else{
+                            safetyMsg = "Trip was safe!";
+                            $("#safetybox").html('<div class="row"><div class="col-lg-4 col-sm-6 col-xs-12"></div><div class="col-lg-4 col-sm-6 col-xs-12"><div class="white-box analytics-info">'
+                            + '<h3 class="box-title" style="text-align: center;">Safety of Trip</h3>'
+                            + '<ul class="list-inline two-part"><li><div class="fa fa-taxi" style="color: yellowgreen;"></div></li><li class="text-right"'
+                            + 'style="text-align:center"><i class="ti-arrow-up text-success" ></i><span class="counter text-success" style="font-size:20px">'
+                            + safetyMsg + '</span></li></div><div class="col-lg-4 col-sm-6 col-xs-12"></div></div>');
+                        }
+                    }
+                })
+            }
+
+            $(document).ready(function () {
+                getNewData();
+                getSpeed();
+                getDriverImage();
+                getSafetyValue();
+                getMapData();
+            })
+        }
+
+        function captureDriverImage() {
+            $.ajax({
+                url: "/api/captureDriverImage/" + bid,
+                type: 'POST',
+                success: function (similarity) {
+                    console.log(similarity);
+                    if (similarity > 1) {
+                        $('#alertmsg').html('<div class="alert alert-success alert-dismissible"><a href="#" class="close" data-dismiss="alert" aria-label="close">'
+                            + '&times;</a><strong>Success! </strong> Driver\'s face detected. Image captured successfully!</div>');
+                    }
+                    else if (similarity == 0) {
+                        $('#alertmsg').html('<div class="alert alert-danger alert-dismissible"><a href="#" class="close" data-dismiss="alert" aria-label="close">'
+                            + '&times;</a><strong>Alert! </strong> Person captured does not match that of the driver recorded in the database</div>');
+                    }
+                    else {
+                        $('#alertmsg').html('<div class="alert alert-warning alert-dismissible"><a href="#" class="close" data-dismiss="alert" aria-label="close">'
+                            + '&times;</a><strong>Warning! </strong> No Driver is currently detected in the car. Please try again later.</div>');
+                    }
+                    googlecharts_is_ready();
+                }
+            });
+        }
+
+        function sendAlert(speed, bookingid) {
+            jQuery.ajax({
+                url: "/api/sendAlert/" + bookingid + "/" + speed,
+                type: 'POST',
+                success: function (message) {
+                    console.log(message);
+                }
+            });
+        }
+
+        function refreshPage() {
+            googlecharts_is_ready();
+        }
+
+    </script>
+
+</head>
+
+<body class="fix-header">
+    <!-- ============================================================== -->
+    <!-- Preloader -->
+    <!-- ============================================================== -->
+    <div class="preloader">
+        <svg class="circular" viewBox="25 25 50 50">
+            <circle class="path" cx="50" cy="50" r="20" fill="none" stroke-width="2" stroke-miterlimit="10" />
+        </svg>
+    </div>
+    <!-- ============================================================== -->
+    <!-- Wrapper -->
+    <!-- ============================================================== -->
+    <div id="wrapper">
+        <!-- ============================================================== -->
+        <!-- Topbar header - style you can find in pages.scss -->
+        <!-- ============================================================== -->
+        <nav class="navbar navbar-default navbar-static-top m-b-0">
+            <div class="navbar-header">
+                <div class="top-left-part" style="text-align: center;">
+                    <!-- Logo icon image, you can use font-icon also -->
+                    <a style="padding: 0;" href="/">
+                        <!--This is light logo icon-->
+                        <img src="../static/plugins/images/grab.png" alt="home" class="light-logo"
+                            style="width: 130px;" />
+                    </a>
+                </div>
+                <!-- /Logo -->
+            </div>
+            <!-- /.navbar-header -->
+            <!-- /.navbar-top-links -->
+            <!-- /.navbar-static-side -->
+        </nav>
+        <!-- End Top Navigation -->
+        <!-- ============================================================== -->
+        <!-- Left Sidebar - style you can find in sidebar.scss  -->
+        <!-- ============================================================== -->
+        <div class="navbar-default sidebar" role="navigation">
+            <div class="sidebar-nav slimscrollsidebar">
+                <div class="sidebar-head">
+                    <h3><span class="fa-fw open-close"><i class="ti-close ti-menu"></i></span> <span
+                            class="hide-menu">Navigation</span></h3>
+                </div>
+                <ul class="nav" id="side-menu">
+                    <li style="padding: 70px 0 0;">
+                        <a href="/" class="waves-effect"><i class="fa fa-clock-o fa-fw"
+                                aria-hidden="true"></i>Dashboard</a>
+                    </li>
+                    <li>
+                        <a href="/summary-table" class="waves-effect"><i class="fa fa-table fa-fw"
+                                aria-hidden="true"></i>Summary Table</a>
+                    </li>
+                    <li>
+                        <a href="/map" class="waves-effect"><i class="fa fa-globe fa-fw" aria-hidden="true"></i>Map</a>
+                    </li>
+                </ul>
+            </div>
+
+        </div>
+        <!-- ============================================================== -->
+        <!-- End Left Sidebar -->
+        <!-- ============================================================== -->
+        <!-- ============================================================== -->
+        <!-- Page Content -->
+        <!-- ============================================================== -->
+        <div id="page-wrapper">
+            <div class="container-fluid">
+                <div class="row bg-title">
+                    <div class="col-lg-3 col-md-4 col-sm-4 col-xs-12">
+                        <h4 class="page-title">Dashboard</h4>
+                    </div>
+                    <div class="col-lg-9 col-sm-8 col-md-8 col-xs-12">
+                        <button target="_blank"
+                            class="btn btn-danger pull-right m-l-20 hidden-xs hidden-sm waves-effect waves-light">Login</button>
+                    </div>
+                    <!-- /.col-lg-12 -->
+                </div>
+                <div id="alertmsg"></div>
+                <div class="row">
+                    <div class="col-lg-4 col-sm-6 col-xs-12">
+                        <div class="white-box analytics-info">
+                            <h3 class="box-title" style="text-align: center;">Average Speed</h3>
+                            <div id="avgspeed_div" style="text-align: -webkit-center;"></div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4 col-sm-6 col-xs-12">
+                        <div>
+                            <div class="white-box analytics-info">
+                                <h3 class="box-title" style="text-align: center;">Total Number of Readings</h3>
+                                <ul class="list-inline two-part">
+                                    <li>
+                                        <div class="fa fa-taxi" style="color: yellowgreen;"></div>
+                                    </li>
+                                    <li class="text-right"><i class="ti-arrow-up text-success"></i> <span
+                                            id="numofreadings" class="counter text-success"></span></li>
+                                </ul>
+                            </div>
+                            <div style="text-align: -webkit-center;">
+                                <button type="button" onclick="captureDriverImage()" class="btn btn-success"
+                                    style="text-align: -webkit-center;"> Capture Driver Image</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4 col-sm-6 col-xs-12">
+                        <div class="white-box analytics-info">
+                            <h3 class="box-title" style="text-align: center;">Top Speed</h3>
+                            <div id="topspeed_div" style="text-align: -webkit-center;"></div>
+                            <div id="alertButton" style="text-align: -webkit-center; margin-top: 2%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class=" row">
+                    <div class="col-sm-12" id="imagebox"></div>
+                </div>
+                <div class=" row">
+                    <div class="col-sm-12" id="safetybox"></div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-12">
+                        <div class="white-box">
+                            <h3 class="box-title">Locations that the vehicle travelled in its last trip</h3>
+                            <!--<div id="gmaps-simple" class="gmaps"></div>-->
+                            <div id="map_div"></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- /.row -->
+                <div class="row">
+                    <div class="col-sm-12">
+                        <div class="white-box">
+                            <h3 class="box-title">Speed of Vehicle</h3>
+                            <div id="chart_div">
+                                <div id="datetimefilter_div"
+                                    style="width: 100%; height: 100%; text-align: -webkit-center;"></div>
+                                <div id="speedlinechart_div" style="width: 100%; height: 100%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- card-body END-->
+                </div>
+
+                <!-- /row -->
+                <div class=" row">
+                    <div class="col-sm-12">
+                        <div class="white-box">
+                            <h3 class="box-title">Readings Table</h3>
+                            <div class="table-responsive">
+                                <div id="table_div">
+                                    <div id="speedfilter_div" style="float: right; height: 100%; text-align: center">
+                                    </div>
+                                    <div id="accelerationfilter_div"
+                                        style="float: right; height: 100%; text-align: center;"></div>
+                                    <div id="speedchart_div" style="width: 100%; height: 100%; text-align: center;">
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary" onclick="refreshPage()"
+                                    style="float: right; margin-right: 7%">
+                                    <span class="glyphicon glyphicon-refresh"></span> Refresh</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+
+        <!-- /.container-fluid -->
+        <footer class="footer text-center"> Grab X Microsoft IOT application
+        </footer>
+    </div>
+    <!-- /#page-wrapper -->
+    </div>
+    <!-- /#wrapper -->
+    <!-- jQuery -->
+    <script src="../static/plugins/bower_components/jquery/dist/jquery.min.js"></script>
+    <!-- Bootstrap Core JavaScript -->
+    <script src="../static/bootstrap/dist/js/bootstrap.min.js"></script>
+    <!-- Menu Plugin JavaScript -->
+    <script src="../static/plugins/bower_components/sidebar-nav/dist/sidebar-nav.min.js"></script>
+    <!--slimscroll JavaScript -->
+    <script src="../static/js/jquery.slimscroll.js"></script>
+    <!--Wave Effects -->
+    <script src="../static/js/waves.js"></script>
+    <!-- Custom Theme JavaScript -->
+    <script src="../static/js/custom.min.js"></script>
+</body>
+
+</html>
